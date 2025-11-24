@@ -1,68 +1,59 @@
 # SERVICE/db_loader.py
 #import pyodbc
+import pyodbc
+import os
+from dotenv import load_dotenv
 from DATA import data
-import pymysql
 
-# Configuración (Idealmente variables de entorno, pero hardcoded para este ejemplo)
-# DB_CONFIG = {
-#     'Driver': '{ODBC Driver 17 for SQL Server}',
-#     'Server': 'LOCALHOST',     # Cambia esto por tu servidor real
-#     'Database': 'RRHH_DB',     # Cambia esto por tu BD real
-#     'Trusted_Connection': 'yes'
-# }
-
-# Configuración BD - mac
-
-DB_HOST = "localhost"
-DB_USER = "root"
-DB_PASSWORD = "prueba"
-DB_NAME = "prueba"
+load_dotenv(override=True)
 
 def actualizar_configuracion_desde_db():
     """
-    Intenta conectarse a la BD para actualizar los valores de DATA/data.py.
-    Si falla, deja los valores por defecto (Fail-Safe).
+    Intenta conectarse a la BD usando la configuración del .env para actualizar 
+    los valores de DATA/data.py.
     """
     print("🔄 Intentando conectar a Base de Datos...")
     
+    # Recuperar configuración del .env
+    conn_str = os.getenv('DB_CONNECTION_STRING')
+    query = os.getenv('DB_QUERY_CONFIG')
+
+    if not conn_str or not query:
+        print("⚠️ Error: No se encontraron las variables DB_CONNECTION_STRING o DB_QUERY_CONFIG en el archivo .env")
+        data.ESTADO_CONEXION = "OFFLINE"
+        data.MENSAJE_ESTADO = "Error Config .env"
+        return
+
     try:
-        conexion = pymysql.connect(
-                host=DB_HOST,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                database=DB_NAME,
-                charset='utf8mb4'
-            )
-        cursor = conexion.cursor()
-        
-        #conn_str = f"DRIVER={DB_CONFIG['Driver']};SERVER={DB_CONFIG['Server']};DATABASE={DB_CONFIG['Database']};Trusted_Connection={DB_CONFIG['Trusted_Connection']}"
-        
-        
-        # Timeout corto (3 segundos) para no congelar la app si no hay internet
-        # with pyodbc.connect(conn_str, timeout=3) as conn:
-        with cursor as conn:
+        # Timeout de 5 segundos para no congelar la app
+        with pyodbc.connect(conn_str, timeout=5) as conn:
+            cursor = conn.cursor()
             
-            # Asumiendo que ya creaste la tabla AppConfig que diseñamos antes
-            cursor.execute("SELECT ConfigKey, Category, val_Main, val_Aux1, val_Aux2, val_Aux3 FROM AppConfig")
+            cursor.execute(query)
+            
+            # pyodbc retorna filas como objetos Row, permitiendo acceso por nombre
             rows = cursor.fetchall()
             
+            # Convertir a diccionario para acceso rápido por ConfigKey
             raw_data = {row.ConfigKey: row for row in rows}
 
-            # --- 1. ACTUALIZAR VARIABLES GLOBALES EN DATA.PY ---
-            # Sobrescribimos las variables del módulo importado
-            data.VALOR_UF_ACTUAL = float(raw_data['VALOR_UF_ACTUAL'].val_Main)
-            data.SUELDO_MINIMO = int(raw_data['SUELDO_MINIMO'].val_Main)
-            data.TOPE_IMPONIBLE_AFP_SALUD = float(raw_data['TOPE_IMPONIBLE_AFP_SALUD'].val_Main)
-            data.TOPE_IMPONIBLE_CESANTIA = float(raw_data['TOPE_IMPONIBLE_CESANTIA'].val_Main)
-            data.DEFAULT_PLAN_ISAPRE_UF = float(raw_data['DEFAULT_PLAN_ISAPRE_UF'].val_Main)
+            # --- 1. ACTUALIZAR VARIABLES GLOBALES ---
+            if 'VALOR_UF_ACTUAL' in raw_data:
+                data.VALOR_UF_ACTUAL = float(raw_data['VALOR_UF_ACTUAL'].val_Main)
+            if 'SUELDO_MINIMO' in raw_data:
+                data.SUELDO_MINIMO = int(raw_data['SUELDO_MINIMO'].val_Main)
+            if 'TOPE_IMPONIBLE_AFP_SALUD' in raw_data:
+                data.TOPE_IMPONIBLE_AFP_SALUD = float(raw_data['TOPE_IMPONIBLE_AFP_SALUD'].val_Main)
+            if 'TOPE_IMPONIBLE_CESANTIA' in raw_data:
+                data.TOPE_IMPONIBLE_CESANTIA = float(raw_data['TOPE_IMPONIBLE_CESANTIA'].val_Main)
+            if 'DEFAULT_PLAN_ISAPRE_UF' in raw_data:
+                data.DEFAULT_PLAN_ISAPRE_UF = float(raw_data['DEFAULT_PLAN_ISAPRE_UF'].val_Main)
 
             # --- 2. ACTUALIZAR DICCIONARIO AFP ---
-            # Limpiamos y rellenamos
             data.TASAS_AFP.clear()
             for row in rows:
                 if row.Category == 'AFP':
                     name = row.ConfigKey.replace('AFP_', '').capitalize()
-                    # Correcciones de nombre manuales si es necesario
                     if name == 'Planvital': name = 'PlanVital'
                     if name == 'Provida': name = 'Provida' 
                     data.TASAS_AFP[name] = float(row.val_Main)
@@ -73,7 +64,8 @@ def actualizar_configuracion_desde_db():
             
             for t in tramos_rows:
                 hasta = float(t.val_Aux1)
-                if hasta > 900000000: hasta = float('inf')
+                # Manejo de infinito (si guardaste 999999999 en la BD)
+                if hasta > 900_000_000: hasta = float('inf')
                 
                 data.tramos_default.append({
                     "desde": float(t.val_Main),
@@ -83,23 +75,26 @@ def actualizar_configuracion_desde_db():
                 })
 
             # --- 4. ACTUALIZAR PARAMETROS DICT ---
+            # Valores seguros por si faltan llaves en la BD
+            tasa_afp_def = float(raw_data['DEFAULT_TASA_AFP'].val_Main) if 'DEFAULT_TASA_AFP' in raw_data else 0.1049
+            tasa_salud_def = float(raw_data['DEFAULT_TASA_SALUD'].val_Main) if 'DEFAULT_TASA_SALUD' in raw_data else 0.07
+            tasa_cesant_def = float(raw_data['DEFAULT_TASA_CESANT'].val_Main) if 'DEFAULT_TASA_CESANT' in raw_data else 0.006
+            
             data.parametros_default.update({
                 "ingreso_minimo": data.SUELDO_MINIMO,
                 "valor_uf": data.VALOR_UF_ACTUAL,
                 "tope_imponible_uf": data.TOPE_IMPONIBLE_AFP_SALUD,
                 "tope_cesantia_uf": data.TOPE_IMPONIBLE_CESANTIA,
-                "tasa_afp": float(raw_data['DEFAULT_TASA_AFP'].val_Main),
-                "tasa_salud": float(raw_data['DEFAULT_TASA_SALUD'].val_Main),
-                "tasa_cesant": float(raw_data['DEFAULT_TASA_CESANT'].val_Main),
+                "tasa_afp": tasa_afp_def,
+                "tasa_salud": tasa_salud_def,
+                "tasa_cesant": tasa_cesant_def,
             })
             
-            # SI LLEGAMOS AQUÍ, TODO SALIÓ BIEN
             data.ESTADO_CONEXION = "ONLINE"
-            data.MENSAJE_ESTADO = "🟢 Conectado a Base de Datos"
-            print("✅ Datos actualizados desde SQL Server.")
+            data.MENSAJE_ESTADO = "Conectado a IARRHH"
+            print("✅ Datos actualizados desde SQL Server (IARRHH).")
 
     except Exception as e:
-        # SI FALLA, NO HACEMOS NADA (Se quedan los defaults de data.py)
         data.ESTADO_CONEXION = "OFFLINE"
-        data.MENSAJE_ESTADO = "🟠 Modo Offline"
-        print(f"⚠️ No se pudo conectar a la BD ({e}). Usando valores locales.")
+        data.MENSAJE_ESTADO = "Modo Offline"
+        print(f"⚠️ Error de conexión BD: {e}. Usando valores locales.")
