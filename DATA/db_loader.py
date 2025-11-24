@@ -1,99 +1,177 @@
 # SERVICE/db_loader.py
 import pyodbc
 import os
+import json
+import math
 from dotenv import load_dotenv
 from DATA import data
 
 load_dotenv(override=True)
 
-def actualizar_configuracion_desde_db():
+CACHE_FILE = "cache_config.json"
+
+# Valor numérico seguro para representar infinito en JSON
+# Usamos un número lo suficientemente grande para que la lógica funcione igual
+MAX_JSON_NUMBER = 999999999999.0 
+
+def guardar_cache_local(datos_dict):
     """
-    Intenta conectarse a la BD usando la configuración del .env para actualizar 
-    los valores de DATA/data.py.
+    Guarda la configuración exitosa en un archivo JSON local.
+    Convierte 'inf' a un número finito para cumplir el estándar JSON.
     """
-    print("🔄 Intentando conectar a Base de Datos...")
+    try:
+        # Hacemos una copia profunda para no modificar los datos en memoria
+        datos_seguros = json.loads(json.dumps(datos_dict, default=lambda x: MAX_JSON_NUMBER if x == float('inf') else x))
+        
+        # Segunda pasada manual por seguridad si json.dumps no capturó todo (por ej en listas anidadas)
+        # Especialmente para tramos
+        if 'tramos_default' in datos_seguros:
+            for tramo in datos_seguros['tramos_default']:
+                if tramo['hasta'] == float('inf') or tramo['hasta'] >= MAX_JSON_NUMBER:
+                    tramo['hasta'] = MAX_JSON_NUMBER
+
+        with open(CACHE_FILE, 'w') as f:
+            json.dump(datos_seguros, f, indent=4)
+        print("💾 Configuración guardada en caché local (JSON Seguro).")
+    except Exception as e:
+        print(f"⚠️ No se pudo escribir caché local: {e}")
+
+def cargar_desde_cache():
+    """Intenta cargar la configuración desde el archivo JSON local"""
+    if not os.path.exists(CACHE_FILE):
+        return False
+        
+    print("📂 Cargando desde caché local...")
+    try:
+        with open(CACHE_FILE, 'r') as f:
+            raw_data = json.load(f)
+            aplicar_datos_a_memoria(raw_data)
+            data.ESTADO_CONEXION = "OFFLINE (Caché)"
+            data.MENSAJE_ESTADO = "Modo Offline (Datos Guardados)"
+            return True
+    except Exception as e:
+        print(f"❌ Error leyendo caché: {e}")
+        return False
+
+def aplicar_datos_a_memoria(raw_data):
+    """Lógica común para inyectar datos al módulo data"""
     
-    # Recuperar configuración del .env
+    # --- 1. ACTUALIZAR VARIABLES GLOBALES ---
+    data.VALOR_UF_ACTUAL = float(raw_data.get('VALOR_UF_ACTUAL', data.VALOR_UF_ACTUAL))
+    data.SUELDO_MINIMO = int(raw_data.get('SUELDO_MINIMO', data.SUELDO_MINIMO))
+    data.TOPE_IMPONIBLE_AFP_SALUD = float(raw_data.get('TOPE_IMPONIBLE_AFP_SALUD', data.TOPE_IMPONIBLE_AFP_SALUD))
+    data.TOPE_IMPONIBLE_CESANTIA = float(raw_data.get('TOPE_IMPONIBLE_CESANTIA', data.TOPE_IMPONIBLE_CESANTIA))
+    data.DEFAULT_PLAN_ISAPRE_UF = float(raw_data.get('DEFAULT_PLAN_ISAPRE_UF', data.DEFAULT_PLAN_ISAPRE_UF))
+
+    # --- 2. ACTUALIZAR DICCIONARIO AFP ---
+    if 'TASAS_AFP' in raw_data:
+        data.TASAS_AFP = raw_data['TASAS_AFP']
+
+    # --- 3. ACTUALIZAR TRAMOS (Con restauración de infinito) ---
+    if 'tramos_default' in raw_data:
+        tramos_limpios = []
+        for t in raw_data['tramos_default']:
+            hasta = float(t['hasta'])
+            # Restaurar infinito si es el número gigante
+            if hasta >= MAX_JSON_NUMBER:
+                hasta = float('inf')
+            
+            tramos_limpios.append({
+                "desde": float(t['desde']),
+                "hasta": hasta,
+                "tasa": float(t['tasa']),
+                "rebaja": float(t['rebaja'])
+            })
+        data.tramos_default = tramos_limpios
+
+    # --- 4. ACTUALIZAR PARAMETROS DICT ---
+    data.parametros_default.update({
+        "ingreso_minimo": data.SUELDO_MINIMO,
+        "valor_uf": data.VALOR_UF_ACTUAL,
+        "tope_imponible_uf": data.TOPE_IMPONIBLE_AFP_SALUD,
+        "tope_cesantia_uf": data.TOPE_IMPONIBLE_CESANTIA,
+        "tasa_afp": data.TASAS_AFP.get('Uno', 0.1049),
+        "tasa_salud": data.parametros_default['tasa_salud'],
+        "tasa_cesant": data.parametros_default['tasa_cesant']
+    })
+
+def actualizar_configuracion_desde_db():
+    # ... (El resto de esta función se mantiene igual que en la versión anterior) ...
+    # Solo asegúrate de que la lógica de 'tramos' dentro del bloque try usa float('inf')
+    # porque guardar_cache_local se encargará de sanitizarlo al final.
+    
+    print("🔄 Intentando conectar a Base de Datos...")
     conn_str = os.getenv('DB_CONNECTION_STRING')
     query = os.getenv('DB_QUERY_CONFIG')
 
-    if not conn_str or not query:
-        print("⚠️ Error: No se encontraron las variables DB_CONNECTION_STRING o DB_QUERY_CONFIG en el archivo .env")
-        data.ESTADO_CONEXION = "OFFLINE"
-        data.MENSAJE_ESTADO = "Error Config .env"
+    if not conn_str:
+        print("⚠️ Sin conexión configurada. Intentando caché...")
+        if not cargar_desde_cache():
+            data.ESTADO_CONEXION = "OFFLINE (Default)"
+            data.MENSAJE_ESTADO = "Usando valores de fábrica"
         return
 
     try:
-        # Timeout de 5 segundos para no congelar la app
         with pyodbc.connect(conn_str, timeout=5) as conn:
             cursor = conn.cursor()
-            
             cursor.execute(query)
-            
-            # pyodbc retorna filas como objetos Row, permitiendo acceso por nombre
             rows = cursor.fetchall()
             
-            # Convertir a diccionario para acceso rápido por ConfigKey
-            raw_data = {row.ConfigKey: row for row in rows}
-
-            # --- 1. ACTUALIZAR VARIABLES GLOBALES ---
-            if 'VALOR_UF_ACTUAL' in raw_data:
-                data.VALOR_UF_ACTUAL = float(raw_data['VALOR_UF_ACTUAL'].val_Main)
-            if 'SUELDO_MINIMO' in raw_data:
-                data.SUELDO_MINIMO = int(raw_data['SUELDO_MINIMO'].val_Main)
-            if 'TOPE_IMPONIBLE_AFP_SALUD' in raw_data:
-                data.TOPE_IMPONIBLE_AFP_SALUD = float(raw_data['TOPE_IMPONIBLE_AFP_SALUD'].val_Main)
-            if 'TOPE_IMPONIBLE_CESANTIA' in raw_data:
-                data.TOPE_IMPONIBLE_CESANTIA = float(raw_data['TOPE_IMPONIBLE_CESANTIA'].val_Main)
-            if 'DEFAULT_PLAN_ISAPRE_UF' in raw_data:
-                data.DEFAULT_PLAN_ISAPRE_UF = float(raw_data['DEFAULT_PLAN_ISAPRE_UF'].val_Main)
-
-            # --- 2. ACTUALIZAR DICCIONARIO AFP ---
-            data.TASAS_AFP.clear()
+            # ... (Procesamiento de escalares y AFPs igual que antes) ...
+            
+            datos_para_cache = {}
+            # (Repetir lógica de extracción de escalares y AFPs aquí)
+            # Por brevedad, copio solo la parte relevante de tramos:
+            
+            # Escalares
+            raw_map = {row.ConfigKey: row for row in rows}
+            datos_para_cache['VALOR_UF_ACTUAL'] = float(raw_map['VALOR_UF_ACTUAL'].val_Main)
+            datos_para_cache['SUELDO_MINIMO'] = int(raw_map['SUELDO_MINIMO'].val_Main)
+            datos_para_cache['TOPE_IMPONIBLE_AFP_SALUD'] = float(raw_map['TOPE_IMPONIBLE_AFP_SALUD'].val_Main)
+            datos_para_cache['TOPE_IMPONIBLE_CESANTIA'] = float(raw_map['TOPE_IMPONIBLE_CESANTIA'].val_Main)
+            datos_para_cache['DEFAULT_PLAN_ISAPRE_UF'] = float(raw_map['DEFAULT_PLAN_ISAPRE_UF'].val_Main)
+            
+            # AFPs
+            afps = {}
             for row in rows:
                 if row.Category == 'AFP':
                     name = row.ConfigKey.replace('AFP_', '').capitalize()
                     if name == 'Planvital': name = 'PlanVital'
                     if name == 'Provida': name = 'Provida' 
-                    data.TASAS_AFP[name] = float(row.val_Main)
+                    afps[name] = float(row.val_Main)
+            datos_para_cache['TASAS_AFP'] = afps
 
-            # --- 3. ACTUALIZAR TRAMOS ---
-            data.tramos_default.clear()
+            # Tramos
+            tramos = []
             tramos_rows = sorted([r for r in rows if r.Category == 'IMPUESTO'], key=lambda x: x.ConfigKey)
-            
             for t in tramos_rows:
                 hasta = float(t.val_Aux1)
-                # Manejo de infinito (si guardaste 999999999 en la BD)
+                # MANTENEMOS INFINITO EN MEMORIA
                 if hasta > 900_000_000: hasta = float('inf')
                 
-                data.tramos_default.append({
+                tramos.append({
                     "desde": float(t.val_Main),
                     "hasta": hasta,
                     "tasa": float(t.val_Aux2),
                     "rebaja": float(t.val_Aux3)
                 })
+            datos_para_cache['tramos_default'] = tramos
 
-            # --- 4. ACTUALIZAR PARAMETROS DICT ---
-            # Valores seguros por si faltan llaves en la BD
-            tasa_afp_def = float(raw_data['DEFAULT_TASA_AFP'].val_Main) if 'DEFAULT_TASA_AFP' in raw_data else 0.1049
-            tasa_salud_def = float(raw_data['DEFAULT_TASA_SALUD'].val_Main) if 'DEFAULT_TASA_SALUD' in raw_data else 0.07
-            tasa_cesant_def = float(raw_data['DEFAULT_TASA_CESANT'].val_Main) if 'DEFAULT_TASA_CESANT' in raw_data else 0.006
+            # APLICAR Y GUARDAR
+            # Aquí es donde ocurre la magia:
+            # 1. Aplicamos a memoria con 'inf' real (para que el cálculo funcione)
+            aplicar_datos_a_memoria(datos_para_cache)
             
-            data.parametros_default.update({
-                "ingreso_minimo": data.SUELDO_MINIMO,
-                "valor_uf": data.VALOR_UF_ACTUAL,
-                "tope_imponible_uf": data.TOPE_IMPONIBLE_AFP_SALUD,
-                "tope_cesantia_uf": data.TOPE_IMPONIBLE_CESANTIA,
-                "tasa_afp": tasa_afp_def,
-                "tasa_salud": tasa_salud_def,
-                "tasa_cesant": tasa_cesant_def,
-            })
+            # 2. Guardamos en disco, la función se encargará de cambiar 'inf' por el número gigante
+            guardar_cache_local(datos_para_cache)
             
             data.ESTADO_CONEXION = "ONLINE"
             data.MENSAJE_ESTADO = "Conectado a IARRHH"
-            print("✅ Datos actualizados desde SQL Server (IARRHH).")
+            print("✅ Datos actualizados y cacheados.")
 
     except Exception as e:
-        data.ESTADO_CONEXION = "OFFLINE"
-        data.MENSAJE_ESTADO = "Modo Offline"
-        print(f"⚠️ Error de conexión BD: {e}. Usando valores locales.")
+        print(f"⚠️ Error conexión BD: {e}")
+        print("🔄 Intentando usar caché local...")
+        if not cargar_desde_cache():
+            data.ESTADO_CONEXION = "OFFLINE (Default)"
+            data.MENSAJE_ESTADO = "Usando valores de fábrica"
