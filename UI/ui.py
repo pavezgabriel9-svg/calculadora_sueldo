@@ -50,7 +50,6 @@ class ConfigUI:
             
         except Exception as e:
             print(f"⚠️ No se pudo cargar el icono: {e}")
-            # La app seguirá funcionando con el icono por defecto si falla
             pass
 
         self.root.eval('tk::PlaceWindow . center')
@@ -65,7 +64,7 @@ class ConfigUI:
         self.crear_seccion_entradas(scroll_frame)
         
         # 2. Componente de Bonos (CORREGIDO)
-        self.bonos_component = BonosFrame(scroll_frame, self.lista_bonos)
+        self.bonos_component = BonosFrame(scroll_frame, self.lista_bonos, self._proxy_formato)
         self.bonos_component.pack(fill='x', pady=(0, 15))
         
         # 3. Botón Calcular
@@ -131,7 +130,23 @@ class ConfigUI:
         ctk.CTkLabel(f, text=label, font=ctk.CTkFont(size=14, weight="bold")).pack(anchor='w')
         entry = ctk.CTkEntry(f, textvariable=var, placeholder_text=ph, height=40, font=ctk.CTkFont(size=14))
         entry.pack(fill='x')
-        if var == self.sueldo_liquido_var: entry.bind('<KeyRelease>', self._manejo_formato_sueldo)
+        
+        if var == self.sueldo_liquido_var: 
+            entry.bind('<KeyRelease>', self._manejo_formato_sueldo)
+        elif var == self.movilizacion_var:
+            entry.bind('<KeyRelease>', self._manejo_formato_movilizacion)
+    
+    def _manejo_formato_movilizacion(self, e):
+        """Formatea el campo movilización al escribir"""
+        if self.formato_chile_sueldo_callback:
+            val_formateado = self.formato_chile_sueldo_callback(self.movilizacion_var.get())
+            self.movilizacion_var.set(val_formateado)
+
+    def _proxy_formato(self, valor: str) -> str:
+        """Método puente que BonosFrame llamará para formatear"""
+        if self.formato_chile_sueldo_callback:
+            return self.formato_chile_sueldo_callback(valor)
+        return valor
 
     def _crear_selector_afp(self, parent, label, row):
         f = ctk.CTkFrame(parent, fg_color="transparent")

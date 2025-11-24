@@ -2,16 +2,15 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 class BonosFrame(ctk.CTkFrame):
-    def __init__(self, parent, lista_bonos_ref):
+    def __init__(self, parent, lista_bonos_ref, callback_formato=None):
         super().__init__(parent, corner_radius=15)
-        self.lista_bonos = lista_bonos_ref  # Referencia a la lista principal
-        
-        # Variables locales (Nombres unificados)
+        self.lista_bonos = lista_bonos_ref
+        self.callback_formato = callback_formato 
+        # Variables locales
         self.bono_nombre_var = ctk.StringVar()
         self.bono_monto_var = ctk.StringVar(value="")
         self.bono_imponible_var = ctk.BooleanVar(value=True)
         
-        # Llamamos al método constructor de la interfaz
         self._crear_interfaz()
     
     def _crear_interfaz(self):
@@ -46,13 +45,25 @@ class BonosFrame(ctk.CTkFrame):
         # Monto
         ctk.CTkLabel(input_grid, text="Monto:", font=ctk.CTkFont(size=12)).grid(
             row=0, column=2, padx=(15, 5), sticky='w')
-        ctk.CTkEntry(
+        
+        self.entry_monto = ctk.CTkEntry(
             input_grid,
             textvariable=self.bono_monto_var,
             width=120,
             height=35,
             placeholder_text="$ 0"
-        ).grid(row=0, column=3, padx=5)
+        )
+        self.entry_monto.grid(row=0, column=3, padx=5)
+
+        self.entry_monto.bind('<KeyRelease>', self._al_escribir_monto)
+
+        # ctk.CTkEntry(
+        #     input_grid,
+        #     textvariable=self.bono_monto_var,
+        #     width=120,
+        #     height=35,
+        #     placeholder_text="$ 0"
+        # ).grid(row=0, column=3, padx=5)
         
         # Checkbox y botón
         control_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
@@ -104,6 +115,12 @@ class BonosFrame(ctk.CTkFrame):
             command=self._eliminar_ultimo_bono
         ).pack(pady=(0, 15), padx=20, fill='x')
 
+    def _al_escribir_monto(self, event):
+        """Llama al callback de formato cuando el usuario escribe"""
+        if self.callback_formato:
+            nuevo_valor = self.callback_formato(self.bono_monto_var.get())
+            self.bono_monto_var.set(nuevo_valor)
+
     def _agregar_bono_interno(self):
         """Valida y agrega un bono a la lista"""
         nombre = self.bono_nombre_var.get().strip()
@@ -120,7 +137,6 @@ class BonosFrame(ctk.CTkFrame):
 
         monto = int(monto_str)
         
-        # Agregar a la lista compartida
         self.lista_bonos.append({
             "nombre": nombre,
             "monto": monto,
