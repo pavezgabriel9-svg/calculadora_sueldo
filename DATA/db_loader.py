@@ -1,5 +1,4 @@
 # SERVICE/db_loader.py
-#import pyodbc
 import pyodbc
 import os
 from dotenv import load_dotenv

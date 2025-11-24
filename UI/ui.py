@@ -4,6 +4,8 @@ from typing import Callable, Optional, List
 from .components.results_popup import ResultadosPopup
 from .components.bonos import BonosFrame 
 from DATA import data
+import os
+import sys
 
 class ConfigUI:
     
@@ -34,7 +36,23 @@ class ConfigUI:
     def _configuracion_ventana(self):
         self.root.title("Calculadora de Sueldos Bases")
         self.root.geometry("700x750")
-        # Centrado simple
+        
+        try:
+            if getattr(sys, 'frozen', False):
+                application_path = sys._MEIPASS
+            else:
+                application_path = os.path.dirname(os.path.abspath(__file__))
+                application_path = os.path.join(application_path, '..')
+
+            icon_path = os.path.join(application_path, 'assets', 'logo.ico')
+            
+            self.root.iconbitmap(icon_path)
+            
+        except Exception as e:
+            print(f"⚠️ No se pudo cargar el icono: {e}")
+            # La app seguirá funcionando con el icono por defecto si falla
+            pass
+
         self.root.eval('tk::PlaceWindow . center')
 
     def _crear_interfaz(self):

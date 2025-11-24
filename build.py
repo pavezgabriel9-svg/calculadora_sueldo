@@ -1,7 +1,6 @@
 import PyInstaller.__main__
 import customtkinter
 import os
-import sys
 
 # 1. Obtener la ruta de instalación de CustomTkinter
 ctk_path = os.path.dirname(customtkinter.__file__)
@@ -15,7 +14,6 @@ args = [
     '--clean',                            # Limpiar caché de compilaciones fallidas
     
     # IMPORTANTE: Incluir los archivos de diseño de CustomTkinter
-    # En Windows el separador es punto y coma (;)
     f'--add-data={ctk_path};customtkinter/',
     
     # Importaciones ocultas (Módulos que a veces PyInstaller no ve)
@@ -25,8 +23,11 @@ args = [
     '--hidden-import=UI',
     '--hidden-import=SERVICE',
     
-    # OPCIONAL: Si tienes un icono .ico, descomenta la siguiente línea:
-    # '--icon=mi_icono.ico', 
+    # AGREGA ESTAS DOS LÍNEAS NUEVAS:
+    '--icon=assets/logo.ico', 
+    
+    # 2. Le decimos que COPIE el archivo dentro de la carpeta final (para que la ventana lo encuentre)
+    '--add-data=assets/logo.ico;assets/'
 ]
 
 print("🚀 Iniciando compilación en Windows...")

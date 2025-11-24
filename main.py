@@ -2,7 +2,7 @@
 from UI.ui import ConfigUI
 from SERVICE import services, engine
 from DATA import db_loader 
-import customtkinter as ctk
+#import customtkinter as ctk
 
 def main():
     db_loader.actualizar_configuracion_desde_db()
