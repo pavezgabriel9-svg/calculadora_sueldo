@@ -2,16 +2,13 @@
 import pyodbc
 import os
 import json
-import math
+#import math
 from dotenv import load_dotenv
 from DATA import data
 
 load_dotenv(override=True)
 
 CACHE_FILE = "cache_config.json"
-
-# Valor numérico seguro para representar infinito en JSON
-# Usamos un número lo suficientemente grande para que la lógica funcione igual
 MAX_JSON_NUMBER = 999999999999.0 
 
 def guardar_cache_local(datos_dict):
@@ -96,10 +93,6 @@ def aplicar_datos_a_memoria(raw_data):
     })
 
 def actualizar_configuracion_desde_db():
-    # ... (El resto de esta función se mantiene igual que en la versión anterior) ...
-    # Solo asegúrate de que la lógica de 'tramos' dentro del bloque try usa float('inf')
-    # porque guardar_cache_local se encargará de sanitizarlo al final.
-    
     print("🔄 Intentando conectar a Base de Datos...")
     conn_str = os.getenv('DB_CONNECTION_STRING')
     query = os.getenv('DB_QUERY_CONFIG')
@@ -116,14 +109,9 @@ def actualizar_configuracion_desde_db():
             cursor = conn.cursor()
             cursor.execute(query)
             rows = cursor.fetchall()
-            
-            # ... (Procesamiento de escalares y AFPs igual que antes) ...
-            
+
             datos_para_cache = {}
-            # (Repetir lógica de extracción de escalares y AFPs aquí)
-            # Por brevedad, copio solo la parte relevante de tramos:
-            
-            # Escalares
+
             raw_map = {row.ConfigKey: row for row in rows}
             datos_para_cache['VALOR_UF_ACTUAL'] = float(raw_map['VALOR_UF_ACTUAL'].val_Main)
             datos_para_cache['SUELDO_MINIMO'] = int(raw_map['SUELDO_MINIMO'].val_Main)
@@ -158,8 +146,6 @@ def actualizar_configuracion_desde_db():
             datos_para_cache['tramos_default'] = tramos
 
             # APLICAR Y GUARDAR
-            # Aquí es donde ocurre la magia:
-            # 1. Aplicamos a memoria con 'inf' real (para que el cálculo funcione)
             aplicar_datos_a_memoria(datos_para_cache)
             
             # 2. Guardamos en disco, la función se encargará de cambiar 'inf' por el número gigante
