@@ -2,6 +2,20 @@
 # SERVICE/engine.py
 from DATA import data
 from typing import List, Dict
+import math
+
+def redondear_a_miles_arriba(valor: float) -> int:
+    """
+    Redondea un valor hacia arriba al siguiente múltiplo de 1000.
+    Ejemplos:
+        123.456 → 124.000
+        523.001 → 524.000
+        520.000 → 520.000 (ya es múltiplo, no cambia)
+    """
+    if valor <= 0:
+        return 0
+    return int(math.ceil(valor / 1000) * 1000)
+
 
 def calcular_impuesto_unico(base_tributable: float) -> float:
     """Calcula el impuesto de segunda categoría según tramos de data.py"""
@@ -19,14 +33,15 @@ def calcular_impuesto_unico(base_tributable: float) -> float:
          
     return 0.0
 
-def resolver_sueldo_base(datos: dict) -> dict:
+
+def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
     """
-    Algoritmo de búsqueda binaria robusto (While Loop + Precisión).
+    Función de simulación forward: dado un sueldo base, calcula el líquido resultante.
+    Retorna (liquido_calculado, diccionario_detalles)
     """
-    # --- 1. Desempaquetar y preparar datos ---
-    liquido_objetivo = datos['sueldo_liquido']
-    movilizacion = datos['movilizacion']
+    # Desempaquetar datos
     lista_bonos: List[Dict] = datos.get('bonos', [])
+    movilizacion = datos['movilizacion']
     
     # Sumas de bonos
     bonos_imponibles = sum(b['monto'] for b in lista_bonos if b['imponible'])
@@ -47,91 +62,112 @@ def resolver_sueldo_base(datos: dict) -> dict:
     
     # Configuración Salud
     usar_fonasa = (datos['salud_sistema'] == 'fonasa')
+    costo_plan_isapre = 0
     if not usar_fonasa:
-        # Si es Isapre, el valor viene en UF desde la UI
         costo_plan_isapre = datos['salud_uf'] * uf
     
-    # --- 2. Configuración del Algoritmo de Búsqueda ---
-    precision = 1.0  # Queremos exactitud de $1 peso
-    min_base = 0
-    max_base = liquido_objetivo * 3.0 # Rango amplio inicial
+    # A. Gratificación
+    tope_grat = (4.75 * ingreso_minimo) / 12
+    gratificacion = min(sueldo_base * 0.25, tope_grat)
     
-    # Variables de resultado
-    base_final = 0
+    # B. Total Imponible (Base + Grat + Bonos)
+    imponible = sueldo_base + gratificacion + bonos_imponibles
+    
+    # C. Aplicar Topes Legales Diferenciados 
+    imp_afecto_afp_salud = min(imponible, tope_pesos_afp_salud)
+    imp_afecto_cesantia = min(imponible, tope_pesos_cesantia)
+    
+    # D. Cálculos Previsionales
+    val_afp = imp_afecto_afp_salud * tasa_afp
+    val_cesantia = imp_afecto_cesantia * tasa_cesantia
+    
+    val_salud = 0
+    if usar_fonasa:
+        val_salud = imp_afecto_afp_salud * tasa_fonasa
+    else:
+        siete_porciento = imp_afecto_afp_salud * tasa_fonasa
+        val_salud = max(siete_porciento, costo_plan_isapre)
+        
+    # E. Impuesto
+    base_trib = imponible - val_afp - val_salud - val_cesantia
+    val_impuesto = calcular_impuesto_unico(base_trib)
+    
+    # F. Líquido
+    tot_haberes = imponible + movilizacion + bonos_no_imponibles
+    tot_descuentos = val_afp + val_salud + val_cesantia + val_impuesto
+    
+    liquido = tot_haberes - tot_descuentos
+    
+    detalles = {
+        "grat": gratificacion,
+        "imp": imponible,
+        "afp": val_afp,
+        "salud": val_salud,
+        "ces": val_cesantia,
+        "tax": val_impuesto,
+        "hab": tot_haberes,
+        "desc": tot_descuentos,
+        "base_trib": base_trib,
+        "bonos_imp": bonos_imponibles,
+        "bonos_no_imp": bonos_no_imponibles
+    }
+    
+    return liquido, detalles
+
+
+def resolver_sueldo_base(datos: dict) -> dict:
+    """
+    Algoritmo de búsqueda binaria con REDONDEO A MILES hacia arriba.
+    
+    El flujo es:
+    1. Buscar el sueldo base exacto que da el líquido objetivo
+    2. Redondear ese sueldo base a miles hacia arriba
+    3. Recalcular con el sueldo redondeado para mostrar cifras reales
+    """
+    liquido_objetivo = datos['sueldo_liquido']
+    movilizacion = datos['movilizacion']
+    lista_bonos: List[Dict] = datos.get('bonos', [])
+    
+    bonos_imponibles = sum(b['monto'] for b in lista_bonos if b['imponible'])
+    bonos_no_imponibles = sum(b['monto'] for b in lista_bonos if not b['imponible'])
+    
+    # --- Configuración del Algoritmo de Búsqueda ---
+    precision = 1.0
+    min_base = 0
+    max_base = liquido_objetivo * 3.0
     iteraciones = 0
     
-    # Función interna de estimación (Simulación Forward)
-    def estimar_liquido(sueldo_base_test):
-        # A. Gratificación
-        tope_grat = (4.75 * ingreso_minimo) / 12
-        gratificacion = min(sueldo_base_test * 0.25, tope_grat)
-        
-        #tope_gratificacion_mensual = 4.75 * ingreso_minimo / 12
-        #gratificacion = min(0.25 * sueldo_base, tope_gratificacion_mensual)
-    
-        
-        # B. Total Imponible (Base + Grat + Bonos)
-        imponible = sueldo_base_test + gratificacion + bonos_imponibles
-        
-        # C. Aplicar Topes Legales Diferenciados 
-        imp_afecto_afp_salud = min(imponible, tope_pesos_afp_salud)
-        imp_afecto_cesantia = min(imponible, tope_pesos_cesantia)
-        
-        # D. Cálculos Previsionales
-        val_afp = imp_afecto_afp_salud * tasa_afp
-        val_cesantia = imp_afecto_cesantia * tasa_cesantia
-        
-        val_salud = 0
-        if usar_fonasa:
-            # Fonasa: 7% del imponible topeado
-            val_salud = imp_afecto_afp_salud * tasa_fonasa
-        else:
-            # Isapre: Mayor valor entre el 7% legal y el plan pactado
-            siete_porciento = imp_afecto_afp_salud * tasa_fonasa
-            val_salud = max(siete_porciento, costo_plan_isapre)
-            
-        # E. Impuesto
-        base_trib = imponible - val_afp - val_salud - val_cesantia
-        val_impuesto = calcular_impuesto_unico(base_trib)
-        
-        # F. Líquido
-        tot_haberes = imponible + movilizacion + bonos_no_imponibles
-        tot_descuentos = val_afp + val_salud + val_cesantia + val_impuesto
-        
-        return tot_haberes - tot_descuentos, {
-            "grat": gratificacion, "imp": imponible, "afp": val_afp, 
-            "salud": val_salud, "ces": val_cesantia, "tax": val_impuesto,
-            "hab": tot_haberes, "desc": tot_descuentos, "base_trib": base_trib,
-        }
-
-    # --- 3. Ejecución del Bucle (While Loop) ---
-    detalles_finales = {}
-    liquido_calc = 0
-    
-    # Expandir rango si es necesario (Safety check)
-    while estimar_liquido(max_base)[0] < liquido_objetivo:
+    # Expandir rango si es necesario
+    while simular_liquido(max_base, datos)[0] < liquido_objetivo:
         max_base *= 2
+        if max_base > 100_000_000:  # Límite de seguridad
+            break
 
+    # --- Búsqueda Binaria ---
+    base_exacta = 0
     while (max_base - min_base) > precision and iteraciones < 100:
-        base_final = (min_base + max_base) / 2
-        liquido_calc, detalles = estimar_liquido(base_final)
+        base_exacta = (min_base + max_base) / 2
+        liquido_calc, _ = simular_liquido(base_exacta, datos)
         
         if liquido_calc < liquido_objetivo:
-            min_base = base_final
+            min_base = base_exacta
         else:
-            max_base = base_final
+            max_base = base_exacta
         
-        detalles_finales = detalles
         iteraciones += 1
-        
-    # Redondear resultado final
-    sueldo_base_final = round(base_final)
     
-    # Recalcular una última vez con el entero redondeado para exactitud de visualización
-    liquido_real, d = estimar_liquido(sueldo_base_final)
+    # --- REDONDEO A MILES HACIA ARRIBA ---
+    sueldo_base_redondeado = redondear_a_miles_arriba(base_exacta)
+    
+    # --- Recalcular con el sueldo redondeado ---
+    liquido_real, d = simular_liquido(sueldo_base_redondeado, datos)
+    
+    # Calcular diferencia (cuánto más recibirá el trabajador por el redondeo)
+    diferencia = liquido_real - liquido_objetivo
     
     return {
-        "sueldo_base": sueldo_base_final,
+        "sueldo_base": sueldo_base_redondeado,
+        "sueldo_base_exacto": round(base_exacta),  # Para referencia
         "gratificacion": round(d['grat']),
         "bonos_imponibles": round(bonos_imponibles),
         "bonos_no_imponibles": round(bonos_no_imponibles),
@@ -142,7 +178,8 @@ def resolver_sueldo_base(datos: dict) -> dict:
         "total_descuentos": round(d['desc']),
         "impuesto": round(d['tax']),
         "cesantia": round(d['ces']),
-        "diferencia": round(liquido_real - liquido_objetivo),
+        "diferencia": round(diferencia),
         "cotizacion_salud": round(d['salud']),
-        "cotizacion_previsional": round(d['afp'])
+        "cotizacion_previsional": round(d['afp']),
+        "redondeo_aplicado": sueldo_base_redondeado - round(base_exacta)
     }

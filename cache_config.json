@@ -1,0 +1,66 @@
+{
+    "VALOR_UF_ACTUAL": 39643.59,
+    "SUELDO_MINIMO": 529000,
+    "TOPE_IMPONIBLE_AFP_SALUD": 87.8,
+    "TOPE_IMPONIBLE_CESANTIA": 131.8,
+    "DEFAULT_PLAN_ISAPRE_UF": 2.822,
+    "TASAS_AFP": {
+        "Capital": 0.1144,
+        "Cuprum": 0.1144,
+        "Habitat": 0.1127,
+        "Modelo": 0.1058,
+        "PlanVital": 0.1116,
+        "Provida": 0.1145,
+        "Uno": 0.1046
+    },
+    "tramos_default": [
+        {
+            "desde": 0.0,
+            "hasta": 938817.0,
+            "tasa": 0.0,
+            "rebaja": 0.0
+        },
+        {
+            "desde": 938817.01,
+            "hasta": 2086260.0,
+            "tasa": 0.04,
+            "rebaja": 37552.68
+        },
+        {
+            "desde": 2086260.01,
+            "hasta": 3477100.0,
+            "tasa": 0.08,
+            "rebaja": 121003.08
+        },
+        {
+            "desde": 3477100.01,
+            "hasta": 4867940.0,
+            "tasa": 0.135,
+            "rebaja": 312243.58
+        },
+        {
+            "desde": 4867940.01,
+            "hasta": 6258780.0,
+            "tasa": 0.23,
+            "rebaja": 774697.88
+        },
+        {
+            "desde": 6258780.01,
+            "hasta": 8345040.0,
+            "tasa": 0.304,
+            "rebaja": 1237847.6
+        },
+        {
+            "desde": 8345040.01,
+            "hasta": 21558020.0,
+            "tasa": 0.35,
+            "rebaja": 1621719.44
+        },
+        {
+            "desde": 21558020.01,
+            "hasta": 999999999999.0,
+            "tasa": 0.4,
+            "rebaja": 2699620.44
+        }
+    ]
+}
