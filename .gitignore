@@ -3,3 +3,4 @@ dist/
 build/
 CalculadoraSueldos.spec
 venv/
+cache_config.json
