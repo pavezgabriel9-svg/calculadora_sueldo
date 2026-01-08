@@ -16,6 +16,7 @@ class ConfigUI:
         
         self.root = ctk.CTk()
         
+        # Callbacks
         self.formato_chile_sueldo_callback: Optional[Callable] = None
         self.calculo_isapre_callback: Optional[Callable] = None
         self.calcular_callback = None
@@ -23,19 +24,23 @@ class ConfigUI:
         
         self.lista_bonos = []
         
-        self.sueldo_liquido_var = ctk.StringVar()
+        # Variables del formulario
+        self.sueldo_var = ctk.StringVar()  # Variable única para el monto principal
         self.afp_seleccionada_var = ctk.StringVar(value="Uno")
         self.tasa_afp_actual_var = ctk.StringVar(value="10.49%")
         self.tipo_salud_var = ctk.StringVar(value="fonasa")
         self.valor_isapre_uf_var = ctk.StringVar(value="")
-        self.movilizacion_var = ctk.StringVar(value="40.000") 
+        self.movilizacion_var = ctk.StringVar(value="40.000")
+        
+        # NUEVA: Variable para el modo de cálculo
+        self.modo_calculo_var = ctk.StringVar(value="liquido_a_base")
         
         self._configuracion_ventana()
         self._crear_interfaz()
         
     def _configuracion_ventana(self):
-        self.root.title("Calculadora de Sueldos Bases")
-        self.root.geometry("700x750")
+        self.root.title("Calculadora de Sueldos")
+        self.root.geometry("700x800")
         
         try:
             if getattr(sys, 'frozen', False):
@@ -45,7 +50,6 @@ class ConfigUI:
                 application_path = os.path.join(application_path, '..')
 
             icon_path = os.path.join(application_path, 'assets', 'logo.ico')
-            
             self.root.iconbitmap(icon_path)
             
         except Exception as e:
@@ -60,10 +64,13 @@ class ConfigUI:
         scroll_frame = ctk.CTkScrollableFrame(self.root, fg_color="transparent")
         scroll_frame.pack(fill='both', expand=True, padx=20, pady=(10, 20))
         
+        # 0. NUEVO: Selector de Modo
+        self._crear_selector_modo(scroll_frame)
+        
         # 1. Entradas Principales
         self.crear_seccion_entradas(scroll_frame)
         
-        # 2. Componente de Bonos (CORREGIDO)
+        # 2. Componente de Bonos
         self.bonos_component = BonosFrame(scroll_frame, self.lista_bonos, self._proxy_formato)
         self.bonos_component.pack(fill='x', pady=(0, 15))
         
@@ -74,17 +81,13 @@ class ConfigUI:
         header = ctk.CTkFrame(self.root, fg_color=("#3b8ed0", "#1f6aa5"), corner_radius=0)
         header.pack(fill='x', pady=(0, 10))
         
-        # Frame interno para organizar título y status
         inner_header = ctk.CTkFrame(header, fg_color="transparent")
         inner_header.pack(pady=10, fill='x', padx=20)
         
-        # TÍTULO
-        ctk.CTkLabel(inner_header, text="Calculadora de Sueldos Bases",
+        ctk.CTkLabel(inner_header, text="Calculadora de Sueldos",
                      font=ctk.CTkFont(size=24, weight="bold"), text_color="white").pack(side='left')
 
-        # --- INDICADOR DE ESTADO (NUEVO) ---
-        # Definir color según estado
-        color_status = "#2ecc71" if data.ESTADO_CONEXION == "ONLINE" else "#e67e22" # Verde o Naranja
+        color_status = "#2ecc71" if data.ESTADO_CONEXION == "ONLINE" else "#e67e22"
         
         status_frame = ctk.CTkFrame(inner_header, fg_color=color_status, corner_radius=20)
         status_frame.pack(side='right')
@@ -92,7 +95,73 @@ class ConfigUI:
         ctk.CTkLabel(status_frame, text=data.MENSAJE_ESTADO, 
                      font=ctk.CTkFont(size=12, weight="bold"), 
                      text_color="white").pack(padx=15, pady=5)
+
+    def _crear_selector_modo(self, parent):
+        """Crea el toggle para seleccionar el modo de cálculo"""
+        frame = ctk.CTkFrame(parent, corner_radius=15)
+        frame.pack(fill='x', pady=(0, 15))
         
+        ctk.CTkLabel(
+            frame, 
+            text="Modo de Cálculo", 
+            font=ctk.CTkFont(size=18, weight="bold"), 
+            anchor="w"
+        ).pack(pady=(15, 10), padx=20, fill='x')
+        
+        # Contenedor para el segmented button
+        toggle_container = ctk.CTkFrame(frame, fg_color="transparent")
+        toggle_container.pack(fill='x', padx=20, pady=(0, 15))
+        
+        # SegmentedButton para elegir modo
+        self.modo_segmented = ctk.CTkSegmentedButton(
+            toggle_container,
+            values=["Líquido → Base", "Base → Líquido"],
+            command=self._on_modo_change,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=45,
+            corner_radius=10
+        )
+        self.modo_segmented.pack(fill='x')
+        self.modo_segmented.set("Líquido → Base")  # Valor por defecto
+        
+        # Label explicativo
+        self.lbl_explicacion = ctk.CTkLabel(
+            frame,
+            text="💡 Ingresa el sueldo líquido deseado y calcula el sueldo base necesario",
+            font=ctk.CTkFont(size=12),
+            text_color=("gray40", "gray60"),
+            anchor="w"
+        )
+        self.lbl_explicacion.pack(padx=20, pady=(0, 15), fill='x')
+
+    def _on_modo_change(self, seleccion):
+        """Callback cuando cambia el modo de cálculo"""
+        if seleccion == "Base → Líquido":
+            self.modo_calculo_var.set("base_a_liquido")
+            self.lbl_sueldo_principal.configure(text="Sueldo Base Deseado")
+            self.entry_sueldo_principal.configure(placeholder_text="Ingresa el sueldo base")
+            self.lbl_explicacion.configure(
+                text="💡 Ingresa el sueldo base y calcula el sueldo líquido resultante"
+            )
+            self.btn_calcular.configure(
+                text="CALCULAR SUELDO LÍQUIDO",
+                fg_color=("#2980b9", "#1a5276")
+            )
+        else:
+            self.modo_calculo_var.set("liquido_a_base")
+            self.lbl_sueldo_principal.configure(text="Sueldo Líquido Deseado")
+            self.entry_sueldo_principal.configure(placeholder_text="Monto líquido deseado")
+            self.lbl_explicacion.configure(
+                text="💡 Ingresa el sueldo líquido deseado y calcula el sueldo base necesario"
+            )
+            self.btn_calcular.configure(
+                text="CALCULAR SUELDO BASE",
+                fg_color=("#27ae60", "#229954")
+            )
+        
+        # Limpiar el campo al cambiar de modo
+        self.sueldo_var.set("")
+
     def crear_seccion_entradas(self, parent):
         frame = ctk.CTkFrame(parent, corner_radius=15)
         frame.pack(fill='x', pady=(0, 15))
@@ -102,13 +171,39 @@ class ConfigUI:
         inputs_container = ctk.CTkFrame(frame, fg_color="transparent")
         inputs_container.pack(fill='x', padx=20, pady=(0, 15))
         
-        self._crear_campo_moderno(inputs_container, "Sueldo Líquido Deseado", self.sueldo_liquido_var, "Monto deseado", row=0)
+        # Campo principal (dinámico según modo)
+        self._crear_campo_sueldo_principal(inputs_container, row=0)
         self._crear_selector_afp(inputs_container, "AFP", row=1)
         self._crear_campo_salud(inputs_container, row=2)
         self._crear_campo_moderno(inputs_container, "Movilización", self.movilizacion_var, "Monto movilización", row=3)
 
+    def _crear_campo_sueldo_principal(self, parent, row):
+        """Crea el campo principal de sueldo (dinámico según modo)"""
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.grid(row=row, column=0, pady=8, sticky='ew')
+        parent.grid_columnconfigure(0, weight=1)
+        
+        # Label dinámico (guardamos referencia para modificarlo)
+        self.lbl_sueldo_principal = ctk.CTkLabel(
+            f, 
+            text="Sueldo Líquido Deseado", 
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        self.lbl_sueldo_principal.pack(anchor='w')
+        
+        # Entry (guardamos referencia)
+        self.entry_sueldo_principal = ctk.CTkEntry(
+            f, 
+            textvariable=self.sueldo_var, 
+            placeholder_text="Monto líquido deseado", 
+            height=40, 
+            font=ctk.CTkFont(size=14)
+        )
+        self.entry_sueldo_principal.pack(fill='x')
+        self.entry_sueldo_principal.bind('<KeyRelease>', self._manejo_formato_sueldo)
+
     def _crear_boton_calcular(self, parent):
-        ctk.CTkButton(
+        self.btn_calcular = ctk.CTkButton(
             parent,
             text="CALCULAR SUELDO BASE",
             font=ctk.CTkFont(size=18, weight="bold"),
@@ -117,7 +212,8 @@ class ConfigUI:
             corner_radius=15,
             cursor="hand2",
             command=self._al_presionar_calcular
-        ).pack(pady=10, fill='x')
+        )
+        self.btn_calcular.pack(pady=10, fill='x')
 
     def _al_presionar_calcular(self):
         if self.calcular_callback:
@@ -131,9 +227,7 @@ class ConfigUI:
         entry = ctk.CTkEntry(f, textvariable=var, placeholder_text=ph, height=40, font=ctk.CTkFont(size=14))
         entry.pack(fill='x')
         
-        if var == self.sueldo_liquido_var: 
-            entry.bind('<KeyRelease>', self._manejo_formato_sueldo)
-        elif var == self.movilizacion_var:
+        if var == self.movilizacion_var:
             entry.bind('<KeyRelease>', self._manejo_formato_movilizacion)
     
     def _manejo_formato_movilizacion(self, e):
@@ -197,28 +291,53 @@ class ConfigUI:
 
     def _manejo_formato_sueldo(self, e):
         if self.formato_chile_sueldo_callback:
-            self.sueldo_liquido_var.set(self.formato_chile_sueldo_callback(self.sueldo_liquido_var.get()))
+            self.sueldo_var.set(self.formato_chile_sueldo_callback(self.sueldo_var.get()))
 
     def obtener_valores_formulario(self) -> dict:
+        """Retorna los valores del formulario incluyendo el modo de cálculo"""
         try:
-            sueldo = int(self.sueldo_liquido_var.get().replace('.', '').replace(',', '') or 0)
+            sueldo = int(self.sueldo_var.get().replace('.', '').replace(',', '') or 0)
             mov = int(self.movilizacion_var.get().replace('.', '').replace(',', '') or 0)
             salud_uf = 0.0
             if self.tipo_salud_var.get() == 'isapre':
-                try: salud_uf = float(self.valor_isapre_uf_var.get().replace(',', '.'))
-                except: pass
+                try: 
+                    salud_uf = float(self.valor_isapre_uf_var.get().replace(',', '.'))
+                except: 
+                    pass
             
-            return {
-                "sueldo_liquido": sueldo,
+            modo = self.modo_calculo_var.get()
+            
+            resultado = {
+                "modo": modo,
                 "movilizacion": mov,
                 "afp_nombre": self.afp_seleccionada_var.get(),
                 "salud_sistema": self.tipo_salud_var.get(),
                 "salud_uf": salud_uf,
                 "bonos": self.lista_bonos 
             }
-        except: return {}
+            
+            # Según el modo, el sueldo va en diferente key
+            if modo == "base_a_liquido":
+                resultado["sueldo_base"] = sueldo
+            else:
+                resultado["sueldo_liquido"] = sueldo
+                
+            return resultado
+        except: 
+            return {}
 
-    def mostrar_resultados_popup(self, res): ResultadosPopup(self.root, res)
-    def mostrar_error(self, t, m): messagebox.showerror(t, m)
-    def mostrar_advertencia(self, t, m): messagebox.showwarning(t, m)
-    def run(self): self.root.mainloop()
+    def obtener_modo_calculo(self) -> str:
+        """Retorna el modo de cálculo actual"""
+        return self.modo_calculo_var.get()
+
+    def mostrar_resultados_popup(self, res, modo="liquido_a_base"): 
+        ResultadosPopup(self.root, res, modo)
+        
+    def mostrar_error(self, t, m): 
+        messagebox.showerror(t, m)
+        
+    def mostrar_advertencia(self, t, m): 
+        messagebox.showwarning(t, m)
+        
+    def run(self): 
+        self.root.mainloop()

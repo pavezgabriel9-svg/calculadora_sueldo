@@ -1,4 +1,3 @@
-# calculos.py
 # SERVICE/engine.py
 from DATA import data
 from typing import List, Dict
@@ -7,10 +6,6 @@ import math
 def redondear_a_miles_arriba(valor: float) -> int:
     """
     Redondea un valor hacia arriba al siguiente múltiplo de 1000.
-    Ejemplos:
-        123.456 → 124.000
-        523.001 → 524.000
-        520.000 → 520.000 (ya es múltiplo, no cambia)
     """
     if valor <= 0:
         return 0
@@ -41,7 +36,7 @@ def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
     """
     # Desempaquetar datos
     lista_bonos: List[Dict] = datos.get('bonos', [])
-    movilizacion = datos['movilizacion']
+    movilizacion = datos.get('movilizacion', 0)
     
     # Sumas de bonos
     bonos_imponibles = sum(b['monto'] for b in lista_bonos if b['imponible'])
@@ -56,15 +51,15 @@ def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
     tope_pesos_cesantia = data.TOPE_IMPONIBLE_CESANTIA * uf
     
     # Tasas
-    tasa_afp = data.TASAS_AFP.get(datos['afp_nombre'], 0.1049)
+    tasa_afp = data.TASAS_AFP.get(datos.get('afp_nombre', 'Uno'), 0.1049)
     tasa_fonasa = data.parametros_default['tasa_salud']
     tasa_cesantia = data.parametros_default['tasa_cesant']
     
     # Configuración Salud
-    usar_fonasa = (datos['salud_sistema'] == 'fonasa')
+    usar_fonasa = (datos.get('salud_sistema', 'fonasa') == 'fonasa')
     costo_plan_isapre = 0
     if not usar_fonasa:
-        costo_plan_isapre = datos['salud_uf'] * uf
+        costo_plan_isapre = datos.get('salud_uf', 0) * uf
     
     # A. Gratificación
     tope_grat = (4.75 * ingreso_minimo) / 12
@@ -115,17 +110,46 @@ def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
     return liquido, detalles
 
 
+def calcular_liquido_desde_base(datos: dict) -> dict:
+    """
+    Calcula el sueldo líquido a partir del sueldo base.
+    Esta es la función "forward" - Base → Líquido
+    """
+    sueldo_base = datos.get('sueldo_base', 0)
+    movilizacion = datos.get('movilizacion', 0)
+    lista_bonos: List[Dict] = datos.get('bonos', [])
+    
+    bonos_imponibles = sum(b['monto'] for b in lista_bonos if b['imponible'])
+    bonos_no_imponibles = sum(b['monto'] for b in lista_bonos if not b['imponible'])
+    
+    # Usar simular_liquido para el cálculo
+    liquido, d = simular_liquido(sueldo_base, datos)
+    
+    return {
+        "sueldo_base": sueldo_base,
+        "gratificacion": round(d['grat']),
+        "bonos_imponibles": round(bonos_imponibles),
+        "bonos_no_imponibles": round(bonos_no_imponibles),
+        "movilizacion": round(movilizacion),
+        "sueldo_liquido": round(liquido),
+        "imponible": round(d['imp']),
+        "total_haberes": round(d['hab']),
+        "total_descuentos": round(d['desc']),
+        "impuesto": round(d['tax']),
+        "cesantia": round(d['ces']),
+        "cotizacion_salud": round(d['salud']),
+        "cotizacion_previsional": round(d['afp']),
+        "base_tributable": round(d['base_trib'])
+    }
+
+
 def resolver_sueldo_base(datos: dict) -> dict:
     """
     Algoritmo de búsqueda binaria con REDONDEO A MILES hacia arriba.
-    
-    El flujo es:
-    1. Buscar el sueldo base exacto que da el líquido objetivo
-    2. Redondear ese sueldo base a miles hacia arriba
-    3. Recalcular con el sueldo redondeado para mostrar cifras reales
+    Esta es la función "inversa" - Líquido → Base
     """
     liquido_objetivo = datos['sueldo_liquido']
-    movilizacion = datos['movilizacion']
+    movilizacion = datos.get('movilizacion', 0)
     lista_bonos: List[Dict] = datos.get('bonos', [])
     
     bonos_imponibles = sum(b['monto'] for b in lista_bonos if b['imponible'])
@@ -167,7 +191,7 @@ def resolver_sueldo_base(datos: dict) -> dict:
     
     return {
         "sueldo_base": sueldo_base_redondeado,
-        "sueldo_base_exacto": round(base_exacta),  # Para referencia
+        "sueldo_base_exacto": round(base_exacta),
         "gratificacion": round(d['grat']),
         "bonos_imponibles": round(bonos_imponibles),
         "bonos_no_imponibles": round(bonos_no_imponibles),
