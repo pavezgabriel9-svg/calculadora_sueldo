@@ -17,11 +17,8 @@ def guardar_cache_local(datos_dict):
     Convierte 'inf' a un número finito para cumplir el estándar JSON.
     """
     try:
-        # Hacemos una copia profunda para no modificar los datos en memoria
         datos_seguros = json.loads(json.dumps(datos_dict, default=lambda x: MAX_JSON_NUMBER if x == float('inf') else x))
         
-        # Segunda pasada manual por seguridad si json.dumps no capturó todo (por ej en listas anidadas)
-        # Especialmente para tramos
         if 'tramos_default' in datos_seguros:
             for tramo in datos_seguros['tramos_default']:
                 if tramo['hasta'] == float('inf') or tramo['hasta'] >= MAX_JSON_NUMBER:

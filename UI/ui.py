@@ -325,7 +325,66 @@ class ConfigUI:
             return resultado
         except: 
             return {}
+    
+    # UI/ui.py - Agregar nuevos campos:
 
+    def crear_seccion_opciones_patronales(self, parent):
+        """Nueva sección para configurar costos patronales"""
+        frame = ctk.CTkFrame(parent, corner_radius=15)
+        frame.pack(fill='x', pady=(0, 15))
+        
+        ctk.CTkLabel(
+            frame, 
+            text="Costos Patronales", 
+            font=ctk.CTkFont(size=18, weight="bold")
+        ).pack(pady=(15, 10), padx=20, fill='x')
+        
+        # Tipo de Contrato
+        self.tipo_contrato_var = ctk.StringVar(value="indefinido")
+        self._crear_selector_simple(
+            frame, 
+            "Tipo de Contrato",
+            self.tipo_contrato_var,
+            ["indefinido", "plazo_fijo", "casa_particular"]
+        )
+        
+        # Nivel de Riesgo
+        self.nivel_riesgo_var = ctk.StringVar(value="bajo")
+        self._crear_selector_simple(
+            frame,
+            "Nivel de Riesgo Laboral",
+            self.nivel_riesgo_var,
+            ["bajo", "medio", "alto"]
+        )
+        
+        # Número de Cargas Familiares
+        self.numero_cargas_var = ctk.StringVar(value="0")
+        self._crear_campo_moderno(
+            frame,
+            "Número de Cargas Familiares",
+            self.numero_cargas_var,
+            "0"
+        )
+
+    def _crear_selector_simple(self, parent, label, variable, opciones):
+        """Crea un selector desplegable simple"""
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.pack(fill='x', padx=20, pady=8)
+        
+        ctk.CTkLabel(
+            f, 
+            text=label, 
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor='w', pady=(0, 5))
+        
+        ctk.CTkOptionMenu(
+            f,
+            variable=variable,
+            values=opciones,
+            height=35,
+            font=ctk.CTkFont(size=13)
+        ).pack(fill='x')
+    
     def obtener_modo_calculo(self) -> str:
         """Retorna el modo de cálculo actual"""
         return self.modo_calculo_var.get()

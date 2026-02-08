@@ -4,13 +4,13 @@
 ESTADO_CONEXION = "OFFLINE" # Por defecto asumimos offline hasta que el loader diga lo contrario
 MENSAJE_ESTADO = "Usando valores por defecto (Sin conexión)"
 
-# --- VALORES POR DEFECTO (Hardcoded - Tu respaldo) ---
+# --- VALORES POR DEFECTO (Hardcoded) ---
 VALOR_UF_ACTUAL = 39597.67
-SUELDO_MINIMO = 529000
+SUELDO_MINIMO = 539000
 
 # Topes Imponibles (En UF)
-TOPE_IMPONIBLE_AFP_SALUD = 87.8  
-TOPE_IMPONIBLE_CESANTIA = 131.8   
+TOPE_IMPONIBLE_AFP_SALUD = 89.9  
+TOPE_IMPONIBLE_CESANTIA = 135.1   
 
 DEFAULT_PLAN_ISAPRE_UF = 2.822
 
@@ -33,12 +33,17 @@ parametros_default = {
     "tope_cesantia_uf": TOPE_IMPONIBLE_CESANTIA,
     "tasa_afp": 0.1049,
     "tasa_salud": 0.07,         
-    "tasa_cesant": 0.006,       
+    "tasa_cesant": 0.006,
+    # --- GRATIFICACIÓN ---
     "factor_gratificacion": 4.75,
-    "porcentaje_gratificacion": 0.25
+    "porcentaje_gratificacion": 0.25,
+    # --- COSTOS PATRONALES (Aportes Empleador) ---
+    "tasa_cesant_empleador": 0.024,
+    "tasa_mutual": 0.0093,
+    "tasa_sis": 0.0154,
 }
 
-# Tramos de Impuesto (Tu lista actual)
+# Tramos de Impuesto
 tramos_default = [
     {"desde": 0,            "hasta": 938_817.00,   "tasa": 0.00,  "rebaja":       0.0},
     {"desde": 938_817.01,   "hasta": 2_086_260.00, "tasa": 0.04,  "rebaja":   37_552.68},
