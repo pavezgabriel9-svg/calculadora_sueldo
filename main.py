@@ -1,7 +1,15 @@
 # main.py
+import sys
+import io
+
+# Configurar UTF-8 para Windows (soluciona problemas con emojis)
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 from UI.ui import ConfigUI
 from SERVICE import services, engine
-from DATA import db_loader 
+from DATA import db_loader
 
 def main():
     # Cargar configuración desde BD o caché

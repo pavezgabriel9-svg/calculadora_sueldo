@@ -13,7 +13,7 @@ class ResultadosPopup(ctk.CTkToplevel):
             titulo = "Cálculo de Base"
             
         self.title(titulo)
-        self.geometry("450x720")  # Aumentado para incluir costos patronales
+        self.geometry("450x720")  
         
         self._crear_interfaz(resultados)
 
@@ -55,8 +55,13 @@ class ResultadosPopup(ctk.CTkToplevel):
             # Luego el BASE (resultado principal)
             self._crear_fila("SUELDO BASE:", resultados['sueldo_base'], es_total=True, es_principal=True)
         
+        #Costo Total Empresa
         self._crear_separador()
-        
+        self._crear_fila("COSTO TOTAL EMPRESA:", 
+                        resultados.get('costo_total_empresa', 0), 
+                        es_total_header=True)
+        self._crear_separador()
+
         # --- DETALLE DE HABERES ---
         self._crear_seccion_header("HABERES")
         self._crear_fila("Gratificación:", resultados['gratificacion'])
@@ -86,42 +91,24 @@ class ResultadosPopup(ctk.CTkToplevel):
         self._crear_separador()
         
         # --- SECCIÓN: COSTOS PATRONALES ---
-        self._crear_seccion_header("COSTOS PATRONALES (EMPLEADOR)")
+        self._crear_seccion_header("COSTOS PATRONALES")
+        self._crear_fila("Seguro Cesantía Empleador:", resultados.get('cesantia_empleador', 0))
+        self._crear_fila("Mutual:", resultados.get('mutual', 0))
+        self._crear_fila("SIS:", resultados.get('sis', 0))
+        self._crear_fila("Cotización Expectativa Vida", resultados.get('expectativa_vida', 0))
+        self._crear_fila("Aporte AFP Empleador", resultados.get('afp_empleador', 0))
+        self._crear_fila("Seguro Complementario Salud", resultados.get('seguro_complementario', 0))
         
-        self._crear_fila("Seguro Cesantía Empleador:", 
-                        resultados.get('cesantia_empleador', 0))
-        self._crear_fila("Mutual / Accidentes del Trabajo:", 
-                        resultados.get('mutual', 0))
-        self._crear_fila("SIS (Invalidez y Sobrevivencia):", 
-                        resultados.get('sis', 0))
         
-        if resultados.get('asignacion_familiar', 0) > 0:
-            self._crear_fila("Asignación Familiar:", 
-                            resultados['asignacion_familiar'])
-        
+
         self._crear_fila("TOTAL COSTOS PATRONALES:", 
                         resultados.get('total_patronal', 0), 
                         es_total=True)
         
-        self._crear_separador()
         
-        # --- COSTO TOTAL EMPRESA ---
-        self._crear_fila("💼 COSTO TOTAL EMPRESA:", 
-                        resultados.get('costo_total_empresa', 0), 
-                        es_total=True, 
-                        es_principal=True)
+        self._crear_separador()
 
-        # --- Botón cerrar ---
-        ctk.CTkButton(
-            self, 
-            text="Cerrar Ventana", 
-            command=self.destroy, 
-            fg_color="gray",
-            hover_color="darkgray",
-            height=35
-        ).pack(pady=10)
-
-    def _crear_fila(self, titulo, valor, es_total=False, es_descuento=False, es_principal=False, es_entrada=False):
+    def _crear_fila(self, titulo, valor, es_total=False, es_descuento=False, es_principal=False, es_entrada=False, es_total_header=False):
         """Helper interno para crear filas de datos"""
         f = ctk.CTkFrame(self.info_frame, fg_color="transparent")
         f.pack(fill='x', pady=2)
@@ -139,6 +126,10 @@ class ResultadosPopup(ctk.CTkToplevel):
             font_size = 14
             font_weight = "bold"
             color_texto = ("#2980b9", "#3498db")  # Azul
+        elif es_total_header:
+            font_size = 16
+            font_weight = "bold"
+            color_texto = ("#2980b9", "#3498db")  # Azul    
         elif es_descuento:
             font_size = 14
             font_weight = "bold"

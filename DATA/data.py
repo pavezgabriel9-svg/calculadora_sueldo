@@ -41,6 +41,9 @@ parametros_default = {
     "tasa_cesant_empleador": 0.024,
     "tasa_mutual": 0.0093,
     "tasa_sis": 0.0154,
+    "cot_exp_vida": 0.009,
+    "afp_empleador": 0.001,
+    "seguro_complementario": 0.4822
 }
 
 # Tramos de Impuesto

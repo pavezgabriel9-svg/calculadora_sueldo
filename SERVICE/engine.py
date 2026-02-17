@@ -31,8 +31,6 @@ def calcular_impuesto_unico(base_tributable: float) -> float:
 
 def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
     """
-    MOTOR CORE: Calcula líquido dado un sueldo base.
-    
     Args:
         sueldo_base: Sueldo base bruto
         datos: Diccionario con configuración (AFP, salud, bonos, etc)
@@ -100,15 +98,27 @@ def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
     tasa_mutual = data.parametros_default.get('tasa_mutual', 0.0093)
     mutual = imp_afecto_afp_salud * tasa_mutual
     
-    # Obtener tasa SIS según AFP (CORREGIDO)
+    # Obtener tasa SIS según AFP
     afp_nombre = datos.get('afp_nombre', 'Uno')
     tasa_sis = data.parametros_default.get('tasa_sis', 0.0154) 
     sis = imp_afecto_afp_salud * tasa_sis
     
+    # expectativa de vida
+    tasa_expectativa_vida = data.parametros_default.get('cot_exp_vida', 0.009)
+    expectativa_vida = imp_afecto_afp_salud * tasa_expectativa_vida
+
+    # cotización afp empleador
+    tasa_afp_empleador = data.parametros_default.get('afp_empleador', 0.001)
+    afp_empleador = imp_afecto_afp_salud * tasa_afp_empleador
+
+    #seguro complementario de salud
+    tasa_seguro_complementario = data.parametros_default.get("seguro_complementario", 0.4822) 
+    seguro_complementario = tasa_seguro_complementario * uf 
+
     # G. Totales
     tot_haberes = imponible + movilizacion + bonos_no_imponibles
     tot_descuentos = val_afp + val_salud + val_cesantia_trab + val_impuesto
-    total_patronal = cesantia_empleador + mutual + sis
+    total_patronal = cesantia_empleador + mutual + sis + expectativa_vida + afp_empleador + seguro_complementario
     
     liquido = tot_haberes - tot_descuentos
     
@@ -129,11 +139,16 @@ def simular_liquido(sueldo_base: float, datos: dict) -> tuple:
         "ces_emp": cesantia_empleador,
         "mutual": mutual,
         "sis": sis,
+        "expectativa_vida": expectativa_vida,
+        "afp_empleador": afp_empleador,
+        "seguro_complementario": seguro_complementario,
         "total_patronal": total_patronal,
         # Tasas para referencia
         "tasa_ces_empleador": tasa_ces_emp,
         "tasa_mutual": tasa_mutual,
-        "tasa_sis": tasa_sis
+        "tasa_sis": tasa_sis,
+        'expectativa_vida': expectativa_vida,
+        'afp_empleador': afp_empleador
     }
     
     return liquido, detalles
@@ -197,7 +212,10 @@ def calcular_liquido_desde_base(datos: dict) -> dict:
         "mutual": round(d['mutual']),
         "sis": round(d['sis']),
         "total_patronal": round(d['total_patronal']),
-        
+        "expectativa_vida": round(d['expectativa_vida']),
+        "afp_empleador": round(d["afp_empleador"]),
+        "seguro_complementario": round(d["seguro_complementario"]),
+
         # Costo total empresa
         "costo_total_empresa": round(d['hab'] + d['total_patronal'])
     }
@@ -272,6 +290,9 @@ def resolver_sueldo_base(datos: dict) -> dict:
         "cesantia_empleador": round(d['ces_emp']),
         "mutual": round(d['mutual']),
         "sis": round(d['sis']),
+        "expectativa_vida": round(d['expectativa_vida']),
+        "afp_empleador": round(d["afp_empleador"]),
+        "seguro_complementario": round(d["seguro_complementario"]),
         "total_patronal": round(d['total_patronal']),
         # Costo total empresa
         "costo_total_empresa": round(d['hab'] + d['total_patronal'])
@@ -312,11 +333,23 @@ def calcular_costos_patronales(imponible: float, afp_nombre: str,
     mutual = imp_afecto_afp_salud * tasa_mutual
     
     # 3. SIS (Seguro Invalidez y Sobrevivencia) - CORREGIDO
-    tasa_sis = data.parametros_default.get('tasa_sis', 0.0154)  # ✅ CORRECCIÓN
+    tasa_sis = data.parametros_default.get('tasa_sis', 0.0154) 
     sis = imp_afecto_afp_salud * tasa_sis
+
+    # expectativa de vida
+    tasa_expectativa_vida = data.parametros_default.get('cot_exp_vida', 0.009)
+    expectativa_vida = imp_afecto_afp_salud * tasa_expectativa_vida
+
+    # cotización afp empleador
+    tasa_afp_empleador = data.parametros_default.get('afp_empleador', 0.001)
+    afp_empleador = imp_afecto_afp_salud * tasa_afp_empleador
+
+     #seguro complementario de salud
+    tasa_seguro_complementario = data.parametros_default.get("seguro_complementario", 0.4822) 
+    seguro_complementario = tasa_seguro_complementario * uf 
     
     # TOTAL COSTO PATRONAL
-    total_patronal = cesantia_empleador + mutual + sis 
+    total_patronal = cesantia_empleador + mutual + sis + expectativa_vida + afp_empleador + seguro_complementario
     
     return {
         "cesantia_empleador": round(cesantia_empleador),
@@ -325,7 +358,11 @@ def calcular_costos_patronales(imponible: float, afp_nombre: str,
         "total_patronal": round(total_patronal),
         "tasa_ces_empleador": tasa_ces_emp,
         "tasa_mutual": tasa_mutual,
-        "tasa_sis": tasa_sis
+        "tasa_sis": tasa_sis,
+        "expectativa_vida": expectativa_vida,
+        "afp_empleador": afp_empleador,
+        "seguro_complementario": seguro_complementario
+
     }
 
     
