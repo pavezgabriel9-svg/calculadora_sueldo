@@ -34,7 +34,10 @@ class ConfigUI:
         
         # NUEVA: Variable para el modo de cálculo
         self.modo_calculo_var = ctk.StringVar(value="liquido_a_base")
-        
+
+        # Variable para el país seleccionado
+        self.pais_seleccionado_var = ctk.StringVar(value="chile")
+
         self._configuracion_ventana()
         self._crear_interfaz()
         
@@ -80,21 +83,80 @@ class ConfigUI:
     def _crear_header(self):
         header = ctk.CTkFrame(self.root, fg_color=("#3b8ed0", "#1f6aa5"), corner_radius=0)
         header.pack(fill='x', pady=(0, 10))
-        
+
         inner_header = ctk.CTkFrame(header, fg_color="transparent")
         inner_header.pack(pady=10, fill='x', padx=20)
-        
+
         ctk.CTkLabel(inner_header, text="Calculadora de Sueldos",
                      font=ctk.CTkFont(size=24, weight="bold"), text_color="white").pack(side='left')
 
         color_status = "#2ecc71" if data.ESTADO_CONEXION == "ONLINE" else "#e67e22"
-        
+
         status_frame = ctk.CTkFrame(inner_header, fg_color=color_status, corner_radius=20)
         status_frame.pack(side='right')
-        
-        ctk.CTkLabel(status_frame, text=data.MENSAJE_ESTADO, 
-                     font=ctk.CTkFont(size=12, weight="bold"), 
+
+        ctk.CTkLabel(status_frame, text=data.MENSAJE_ESTADO,
+                     font=ctk.CTkFont(size=12, weight="bold"),
                      text_color="white").pack(padx=15, pady=5)
+
+        # Agregar selector de país al header
+        self._crear_selector_pais(header)
+
+    def _crear_selector_pais(self, parent):
+        """Crea el selector de país en el header"""
+        frame_pais = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_pais.pack(pady=(10, 5), fill='x', padx=20)
+
+        # Label
+        ctk.CTkLabel(
+            frame_pais,
+            text="🌎 País:",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="white"
+        ).pack(side='left', padx=(0, 10))
+
+        # Segmented Button para países
+        self.pais_segmented = ctk.CTkSegmentedButton(
+            frame_pais,
+            values=["🇨🇱 Chile", "🇵🇪 Perú", "🇧🇷 Brasil"],
+            command=self._on_pais_change,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=40,
+            corner_radius=8,
+            fg_color=("white", "#1f538d"),
+            selected_color=("#FDD835", "#F9A825"),
+            selected_hover_color=("#FBC02D", "#F57F17")
+        )
+        self.pais_segmented.pack(side='left', fill='x', expand=True)
+        self.pais_segmented.set("🇨🇱 Chile")  # Default
+
+    def _on_pais_change(self, seleccion: str):
+        """Callback ejecutado al cambiar de país"""
+        # Mapeo de nombres a códigos
+        pais_map = {
+            "🇨🇱 Chile": "chile",
+            "🇵🇪 Perú": "peru",
+            "🇧🇷 Brasil": "brasil"
+        }
+
+        codigo_pais = pais_map.get(seleccion, "chile")
+        self.pais_seleccionado_var.set(codigo_pais)
+
+        # TODO Fase 2: Cargar configuración específica del país
+        # - Actualizar labels (AFP → ONP → INSS según país)
+        # - Actualizar opciones de sistemas previsionales
+        # - Actualizar sistemas de salud
+        # - Recargar valores por defecto
+
+        print(f"🌎 País cambiado a: {codigo_pais.upper()}")
+
+        # Feedback visual al usuario
+        from tkinter import messagebox
+        messagebox.showinfo(
+            "País Actualizado",
+            f"Configuración actualizada para:\n\n{seleccion}\n\n"
+            f"(Fase 2: Se cargarán las configuraciones específicas)"
+        )
 
     def _crear_selector_modo(self, parent):
         """Crea el toggle para seleccionar el modo de cálculo"""
@@ -325,10 +387,73 @@ class ConfigUI:
             return resultado
         except: 
             return {}
+    
+    # UI/ui.py - Agregar nuevos campos:
 
+    def crear_seccion_opciones_patronales(self, parent):
+        """Nueva sección para configurar costos patronales"""
+        frame = ctk.CTkFrame(parent, corner_radius=15)
+        frame.pack(fill='x', pady=(0, 15))
+        
+        ctk.CTkLabel(
+            frame, 
+            text="Costos Patronales", 
+            font=ctk.CTkFont(size=18, weight="bold")
+        ).pack(pady=(15, 10), padx=20, fill='x')
+        
+        # Tipo de Contrato
+        self.tipo_contrato_var = ctk.StringVar(value="indefinido")
+        self._crear_selector_simple(
+            frame, 
+            "Tipo de Contrato",
+            self.tipo_contrato_var,
+            ["indefinido", "plazo_fijo", "casa_particular"]
+        )
+        
+        # Nivel de Riesgo
+        self.nivel_riesgo_var = ctk.StringVar(value="bajo")
+        self._crear_selector_simple(
+            frame,
+            "Nivel de Riesgo Laboral",
+            self.nivel_riesgo_var,
+            ["bajo", "medio", "alto"]
+        )
+        
+        # Número de Cargas Familiares
+        self.numero_cargas_var = ctk.StringVar(value="0")
+        self._crear_campo_moderno(
+            frame,
+            "Número de Cargas Familiares",
+            self.numero_cargas_var,
+            "0"
+        )
+
+    def _crear_selector_simple(self, parent, label, variable, opciones):
+        """Crea un selector desplegable simple"""
+        f = ctk.CTkFrame(parent, fg_color="transparent")
+        f.pack(fill='x', padx=20, pady=8)
+        
+        ctk.CTkLabel(
+            f, 
+            text=label, 
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor='w', pady=(0, 5))
+        
+        ctk.CTkOptionMenu(
+            f,
+            variable=variable,
+            values=opciones,
+            height=35,
+            font=ctk.CTkFont(size=13)
+        ).pack(fill='x')
+    
     def obtener_modo_calculo(self) -> str:
         """Retorna el modo de cálculo actual"""
         return self.modo_calculo_var.get()
+
+    def obtener_pais_seleccionado(self) -> str:
+        """Retorna el código del país seleccionado"""
+        return self.pais_seleccionado_var.get()
 
     def mostrar_resultados_popup(self, res, modo="liquido_a_base"): 
         ResultadosPopup(self.root, res, modo)

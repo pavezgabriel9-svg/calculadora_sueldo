@@ -2,19 +2,18 @@ import customtkinter as ctk
 
 class ResultadosPopup(ctk.CTkToplevel):
     def __init__(self, parent, resultados: dict, modo: str = "liquido_a_base"):
-        """
-        Crea una ventana flotante independiente con los resultados.
-        
-        Args:
-            parent: Ventana padre
-            resultados: Diccionario con los resultados del cálculo
-            modo: "liquido_a_base" o "base_a_liquido"
-        """
         super().__init__(parent)
         
         self.modo = modo
-        self.title("Resultado del Cálculo")
-        self.geometry("450x620")
+        
+        # Ajustar título según modo
+        if modo == "base_a_liquido":
+            titulo = "Cálculo de Líquido"
+        else:
+            titulo = "Cálculo de Base"
+            
+        self.title(titulo)
+        self.geometry("450x720")  
         
         self._crear_interfaz(resultados)
 
@@ -50,14 +49,21 @@ class ResultadosPopup(ctk.CTkToplevel):
             self._crear_fila("SUELDO LÍQUIDO:", resultados['sueldo_liquido'], es_total=True, es_principal=True)
         else:
             # Primero el LÍQUIDO objetivo
-            self._crear_fila("Líquido Objetivo (entrada):", resultados.get('sueldo_liquido', 0) - resultados.get('diferencia', 0), es_entrada=True)
+            liquido_objetivo = resultados.get('sueldo_liquido', 0) - resultados.get('diferencia', 0)
+            self._crear_fila("Líquido Objetivo (entrada):", liquido_objetivo, es_entrada=True)
             self._crear_separador()
             # Luego el BASE (resultado principal)
             self._crear_fila("SUELDO BASE:", resultados['sueldo_base'], es_total=True, es_principal=True)
         
+        #Costo Total Empresa
         self._crear_separador()
-        
+        self._crear_fila("COSTO TOTAL EMPRESA:", 
+                        resultados.get('costo_total_empresa', 0), 
+                        es_total_header=True)
+        self._crear_separador()
+
         # --- DETALLE DE HABERES ---
+        self._crear_seccion_header("HABERES")
         self._crear_fila("Gratificación:", resultados['gratificacion'])
         
         if resultados.get('bonos_imponibles', 0) > 0:
@@ -75,6 +81,7 @@ class ResultadosPopup(ctk.CTkToplevel):
         self._crear_separador()
         
         # --- DETALLE DE DESCUENTOS ---
+        self._crear_seccion_header("DESCUENTOS TRABAJADOR")
         self._crear_fila('Cotización Previsional (AFP):', resultados.get('cotizacion_previsional', 0))
         self._crear_fila('Cotización Salud:', resultados.get('cotizacion_salud', 0))
         self._crear_fila("Seguro Cesantía:", resultados.get('cesantia', 0))
@@ -83,27 +90,25 @@ class ResultadosPopup(ctk.CTkToplevel):
         
         self._crear_separador()
         
-        # # --- RESULTADO FINAL (repetido para claridad) ---
-        # if self.modo == "base_a_liquido":
-        #     self._crear_fila("SUELDO LÍQUIDO FINAL:", resultados['sueldo_liquido'], es_total=True, es_principal=True)
-        # else:
-        #     self._crear_fila("SUELDO LÍQUIDO RESULTANTE:", resultados['sueldo_liquido'], es_total=True, es_principal=True)
-        #     # Mostrar diferencia si hay redondeo
-        #     diferencia = resultados.get('diferencia', 0)
-        #     if diferencia != 0:
-        #         self._crear_nota_diferencia(diferencia)
+        # --- SECCIÓN: COSTOS PATRONALES ---
+        self._crear_seccion_header("COSTOS PATRONALES")
+        self._crear_fila("Seguro Cesantía Empleador:", resultados.get('cesantia_empleador', 0))
+        self._crear_fila("Mutual:", resultados.get('mutual', 0))
+        self._crear_fila("SIS:", resultados.get('sis', 0))
+        self._crear_fila("Cotización Expectativa Vida", resultados.get('expectativa_vida', 0))
+        self._crear_fila("Aporte AFP Empleador", resultados.get('afp_empleador', 0))
+        self._crear_fila("Seguro Complementario Salud", resultados.get('seguro_complementario', 0))
+        
+        
 
-        # --- Botón cerrar ---
-        ctk.CTkButton(
-            self, 
-            text="Cerrar Ventana", 
-            command=self.destroy, 
-            fg_color="gray",
-            hover_color="darkgray",
-            height=35
-        ).pack(pady=10)
+        self._crear_fila("TOTAL COSTOS PATRONALES:", 
+                        resultados.get('total_patronal', 0), 
+                        es_total=True)
+        
+        
+        self._crear_separador()
 
-    def _crear_fila(self, titulo, valor, es_total=False, es_descuento=False, es_principal=False, es_entrada=False):
+    def _crear_fila(self, titulo, valor, es_total=False, es_descuento=False, es_principal=False, es_entrada=False, es_total_header=False):
         """Helper interno para crear filas de datos"""
         f = ctk.CTkFrame(self.info_frame, fg_color="transparent")
         f.pack(fill='x', pady=2)
@@ -121,6 +126,10 @@ class ResultadosPopup(ctk.CTkToplevel):
             font_size = 14
             font_weight = "bold"
             color_texto = ("#2980b9", "#3498db")  # Azul
+        elif es_total_header:
+            font_size = 16
+            font_weight = "bold"
+            color_texto = ("#2980b9", "#3498db")  # Azul    
         elif es_descuento:
             font_size = 14
             font_weight = "bold"
@@ -144,6 +153,19 @@ class ResultadosPopup(ctk.CTkToplevel):
             text_color=color_texto
         ).pack(side='right')
 
+    def _crear_seccion_header(self, texto: str):
+        """Crea un encabezado de sección destacado"""
+        f = ctk.CTkFrame(self.info_frame, fg_color="transparent")
+        f.pack(fill='x', pady=(15, 10))
+        
+        ctk.CTkLabel(
+            f,
+            text=texto,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=("#2c3e50", "#ecf0f1"),
+            anchor="w"
+        ).pack(fill='x')
+
     def _crear_nota_diferencia(self, diferencia: int):
         """Muestra la diferencia respecto al líquido objetivo (solo en modo inverso)"""
         f = ctk.CTkFrame(self.info_frame, fg_color=("#fff3cd", "#3d3520"), corner_radius=8)
@@ -166,4 +188,5 @@ class ResultadosPopup(ctk.CTkToplevel):
         ).pack(pady=8, padx=10, anchor='w')
 
     def _crear_separador(self):
+        """Crea una línea separadora visual"""
         ctk.CTkFrame(self.info_frame, height=2, fg_color="gray").pack(fill='x', pady=10)
